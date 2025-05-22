@@ -105,10 +105,48 @@ export class DingTalkRobot implements INodeType {
 				},
 			},
 			{
+				displayName: '消息发送方式',
+				name: 'sendMsgType',
+				type: 'options',
+				required: true,
+				options: [
+					{
+						name: '群聊',
+						value: 'groupChat',
+					},
+					{
+						name: '私聊',
+						value: 'privateChat',
+					}
+				],
+				default: 'groupChat',
+				displayOptions: {
+					show: {
+						type: ['companyInternalRobot'],
+						enableJsonMode: [false]
+					},
+				},
+			},
+			{
+				displayName: '群会话ID',
+				name: 'openConversationId',
+				type: 'string',
+				default: '',
+				required: true,
+				hint: '群会话ID（conversationId），可以从钉钉群消息中获取',
+				displayOptions: {
+					show: {
+						type: ['companyInternalRobot'],
+						sendMsgType: ['groupReply'],
+						enableJsonMode: [false],
+					},
+				},
+			},
+			{
 				displayName: '用户集合',
 				name: 'userIds',
 				required: true,
-				// description: '用户集合',
+				hint: '私聊用户集合',
 				placeholder: '添加用户',
 				type: 'fixedCollection',
 				typeOptions: {
@@ -117,6 +155,7 @@ export class DingTalkRobot implements INodeType {
 				displayOptions: {
 					show: {
 						type: ['companyInternalRobot'],
+						sendMsgType: ['privateChat'],
 						enableJsonMode: [false],
 					},
 				},
@@ -1088,6 +1127,7 @@ export class DingTalkRobot implements INodeType {
 			if (!token) {
 				throw new NodeOperationError(this.getNode(), 'get token fail');
 			}
+
 			const getUserIdByMobileUrl =
 				'https://oapi.dingtalk.com/topapi/v2/user/getbymobile?access_token=' + token;
 			const result = [];
@@ -1111,32 +1151,36 @@ export class DingTalkRobot implements INodeType {
 						);
 					} else {
 						const nodeParameters = JSON.parse(JSON.stringify(this.getNode().parameters));
-						const userIds: { users: [] } = nodeParameters?.userIds;
+						const sendMsgType = nodeParameters?.sendMsgType;
+						const userIds: { users: [] } = nodeParameters?.userIds || { users: [] };
 						const userIdList: string[] = [];
-						let failUser = [];
-						for (let i = 0; i < userIds.users.length; i++) {
-							const user: { mobile: any } = userIds.users[i];
-							const mobile = user.mobile;
-							const res = await axios.post(
-								getUserIdByMobileUrl,
-								{ mobile: mobile },
-								{
-									headers: {
-										'Content-Type': 'application/json',
+
+						if (sendMsgType == 'privateChat') {
+							let failUser = [];
+							for (let i = 0; i < userIds.users.length; i++) {
+								const user: { mobile: any } = userIds.users[i];
+								const mobile = user.mobile;
+								const res = await axios.post(
+									getUserIdByMobileUrl,
+									{ mobile: mobile },
+									{
+										headers: {
+											'Content-Type': 'application/json',
+										},
 									},
-								},
-							);
-							if (res?.data?.errcode !== 0) {
-								failUser.push(mobile);
-							} else {
-								userIdList.push(res?.data?.result?.userid);
+								);
+								if (res?.data?.errcode !== 0) {
+									failUser.push(mobile);
+								} else {
+									userIdList.push(res?.data?.result?.userid);
+								}
 							}
-						}
-						if (failUser && failUser.length > 0) {
-							result.push({ json: { failUser: failUser } });
-						}
-						if (!userIdList || userIdList.length === 0) {
-							return this.prepareOutputData(result);
+							if (failUser && failUser.length > 0) {
+								result.push({ json: { failUser: failUser } });
+							}
+							if (!userIdList || userIdList.length === 0) {
+								return this.prepareOutputData(result);
+							}
 						}
 
 						delete nodeParameters.type;
@@ -1156,6 +1200,7 @@ export class DingTalkRobot implements INodeType {
 							const binaryPropertyName = sendMsgParams.binaryPropertyName;
 							// @ts-ignorex
 							const binaryData = this.helpers.assertBinaryData(itemIndex, binaryPropertyName) as IBinaryData;
+							console.log('sendMsgParams', sendMsgParams)
 							// 处理默认字段
 							if (!sendMsgParams.fileName) {
 								sendMsgParams.fileName = binaryData.fileName
@@ -1163,6 +1208,7 @@ export class DingTalkRobot implements INodeType {
 							if (!sendMsgParams.fileType) {
 								sendMsgParams.fileType = binaryData.fileExtension
 							}
+							console.log('sendMsgParams', sendMsgParams)
 							const uploadMediaUrl = 'https://oapi.dingtalk.com/media/upload?access_token=' + token;
 
 							const formData = new FormData();
@@ -1183,20 +1229,39 @@ export class DingTalkRobot implements INodeType {
 							});
 							sendMsgParams.mediaId = response.data.media_id;
 						}
-						let sendParams = {
-							robotCode: robotCode,
-							msgKey: msgKey,
-							userIds: userIdList,
-							msgParam: JSON.stringify(sendMsgParams).replace(/\\\\/g, '\\'),
-						};
-						// console.log(sendParams);
-						const batchSendOTORequest = new $RobotClient.BatchSendOTORequest(sendParams);
-						const sendRes = await robotClient.batchSendOTOWithOptions(
-							batchSendOTORequest,
-							batchSendOTOHeaders,
-							new $Util.RuntimeOptions({}),
-						);
-						result.push({ json: sendRes.body });
+
+						if (sendMsgType == 'privateChat') {
+							let sendParams = {
+								robotCode: robotCode,
+								msgKey: msgKey,
+								userIds: userIdList,
+								msgParam: JSON.stringify(sendMsgParams).replace(/\\\\/g, '\\'),
+							};
+							// console.log(sendParams);
+							const batchSendOTORequest = new $RobotClient.BatchSendOTORequest(sendParams);
+							const sendRes = await robotClient.batchSendOTOWithOptions(
+								batchSendOTORequest,
+								batchSendOTOHeaders,
+								new $Util.RuntimeOptions({}),
+							);
+							result.push({ json: sendRes.body });
+						} else { // groupChat
+							let sendParams = {
+								robotCode: robotCode,
+								msgKey: msgKey,
+								openConversationId: nodeParameters?.openConversationId,
+								msgParam: JSON.stringify(sendMsgParams).replace(/\\\\/g, '\\'),
+							}
+							const orgGroupSendRequest = new $RobotClient.OrgGroupSendRequest(sendParams);
+							const orgGroupSendHeaders = new $RobotClient.OrgGroupSendHeaders()
+							orgGroupSendHeaders.xAcsDingtalkAccessToken = token;
+							const sendRes = await robotClient.orgGroupSendWithOptions(
+								orgGroupSendRequest,
+								orgGroupSendHeaders,
+								new $Util.RuntimeOptions({})
+							)
+							result.push({ json: sendRes.body });
+						}
 					}
 				} catch (error) {
 					if (this.continueOnFail()) {
