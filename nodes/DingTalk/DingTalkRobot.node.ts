@@ -1187,6 +1187,8 @@ export class DingTalkRobot implements INodeType {
 						delete nodeParameters.enableJsonMode;
 						delete nodeParameters.userIds;
 						delete nodeParameters.msgKey;
+						delete nodeParameters.sendMsgType;  // ...
+
 						let sendMsgParams = {} as Record<string, any>;
 						// tslint:disable-next-line:forin
 						for (const nodeParametersKey in nodeParameters) {
@@ -1246,12 +1248,15 @@ export class DingTalkRobot implements INodeType {
 							);
 							result.push({ json: sendRes.body });
 						} else { // groupChat
+							const openConversationId = sendMsgParams.openConversationId;
+							delete sendMsgParams.openConversationId;
 							let sendParams = {
 								robotCode: robotCode,
 								msgKey: msgKey,
-								openConversationId: nodeParameters?.openConversationId,
+								openConversationId: openConversationId,
 								msgParam: JSON.stringify(sendMsgParams).replace(/\\\\/g, '\\'),
 							}
+							// console.log(sendParams);
 							const orgGroupSendRequest = new $RobotClient.OrgGroupSendRequest(sendParams);
 							const orgGroupSendHeaders = new $RobotClient.OrgGroupSendHeaders()
 							orgGroupSendHeaders.xAcsDingtalkAccessToken = token;
