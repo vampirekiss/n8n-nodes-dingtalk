@@ -111,15 +111,15 @@ export class DingTalkRobot implements INodeType {
 				required: true,
 				options: [
 					{
-						name: '群聊',
-						value: 'groupChat',
-					},
-					{
 						name: '私聊',
 						value: 'privateChat',
+					},
+					{
+						name: '群聊',
+						value: 'groupChat',
 					}
 				],
-				default: 'groupChat',
+				default: 'privateChat',
 				displayOptions: {
 					show: {
 						type: ['companyInternalRobot'],
@@ -137,7 +137,7 @@ export class DingTalkRobot implements INodeType {
 				displayOptions: {
 					show: {
 						type: ['companyInternalRobot'],
-						sendMsgType: ['groupReply'],
+						sendMsgType: ['groupChat'],
 						enableJsonMode: [false],
 					},
 				},
