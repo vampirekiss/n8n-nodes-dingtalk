@@ -117,6 +117,10 @@ export class DingTalkRobot implements INodeType {
 					{
 						name: '群聊',
 						value: 'groupChat',
+					},
+					{
+						name: '回复',
+						value: 'replyChat'
 					}
 				],
 				default: 'privateChat',
@@ -128,19 +132,49 @@ export class DingTalkRobot implements INodeType {
 				},
 			},
 			{
-				displayName: '群会话ID',
-				name: 'openConversationId',
-				type: 'string',
+				displayName: '会话类型',
+				name: 'conversationType',
+				type: "string",
 				default: '',
 				required: true,
-				hint: '群会话ID（conversationId），可以从钉钉群消息中获取',
+				hint: '会话类型（对应WebHook中的conversationType）',
 				displayOptions: {
 					show: {
 						type: ['companyInternalRobot'],
-						sendMsgType: ['groupChat'],
+						sendMsgType: ['replyChat'],
+						enableJsonMode: [false],
+					}
+				}
+			},
+			{
+				displayName: '会话ID',
+				name: 'conversationId',
+				type: 'string',
+				default: '',
+				required: true,
+				hint: '会话ID（对应WebHook中的conversationId）',
+				displayOptions: {
+					show: {
+						type: ['companyInternalRobot'],
+						sendMsgType: ['groupChat', 'replyChat'],
 						enableJsonMode: [false],
 					},
 				},
+			},
+			{
+				displayName: '发送人ID',
+				name: 'senderStaffId',
+				type: "string",
+				default: '',
+				required: false,
+				hint: '要回复的发送人ID（对应WebHook中的senderStaffId），conversationType为1（即私聊时必填）',
+				displayOptions: {
+					show: {
+						type: ['companyInternalRobot'],
+						sendMsgType: ['replyChat'],
+						enableJsonMode: [false],
+					}
+				}
 			},
 			{
 				displayName: '用户集合',
@@ -1247,9 +1281,9 @@ export class DingTalkRobot implements INodeType {
 								new $Util.RuntimeOptions({}),
 							);
 							result.push({ json: sendRes.body });
-						} else { // groupChat
-							const openConversationId = sendMsgParams.openConversationId;
-							delete sendMsgParams.openConversationId;
+						} else if(sendMsgType == 'groupChat') { // groupChat
+							const openConversationId = sendMsgParams.conversationId;
+							delete sendMsgParams.conversationId;
 							let sendParams = {
 								robotCode: robotCode,
 								msgKey: msgKey,
@@ -1266,6 +1300,49 @@ export class DingTalkRobot implements INodeType {
 								new $Util.RuntimeOptions({})
 							)
 							result.push({ json: sendRes.body });
+						} else if (sendMsgType == 'replyChat') { // replyChat
+							const { conversationType, conversationId, senderStaffId } = sendMsgParams;
+							delete sendMsgParams.conversationId;
+							delete sendMsgParams.conversationType;
+							delete sendMsgParams.senderStaffId;
+							if (conversationType == '1') { // reply privateChat
+								if (!senderStaffId) {
+									throw new NodeOperationError(this.getNode(), "私聊回复时(conversationType=1)，缺少发送人ID(senderStaffId)参数", {
+										itemIndex,
+									});
+								}
+								let sendParams = {
+									robotCode: robotCode,
+									msgKey: msgKey,
+									userIds: [senderStaffId],
+									msgParam: JSON.stringify(sendMsgParams).replace(/\\\\/g, '\\'),
+								};
+								// console.log(sendParams);
+								const batchSendOTORequest = new $RobotClient.BatchSendOTORequest(sendParams);
+								const sendRes = await robotClient.batchSendOTOWithOptions(
+									batchSendOTORequest,
+									batchSendOTOHeaders,
+									new $Util.RuntimeOptions({}),
+								);
+								result.push({ json: sendRes.body });
+							} else if (conversationType == '2') { // reply groupChat
+								let sendParams = {
+									robotCode: robotCode,
+									msgKey: msgKey,
+									openConversationId: conversationId,
+									msgParam: JSON.stringify(sendMsgParams).replace(/\\\\/g, '\\'),
+								}
+								// console.log(sendParams);
+								const orgGroupSendRequest = new $RobotClient.OrgGroupSendRequest(sendParams);
+								const orgGroupSendHeaders = new $RobotClient.OrgGroupSendHeaders()
+								orgGroupSendHeaders.xAcsDingtalkAccessToken = token;
+								const sendRes = await robotClient.orgGroupSendWithOptions(
+									orgGroupSendRequest,
+									orgGroupSendHeaders,
+									new $Util.RuntimeOptions({})
+								)
+								result.push({ json: sendRes.body });
+							}
 						}
 					}
 				} catch (error) {
