@@ -147,6 +147,21 @@ export class DingTalkRobot implements INodeType {
 				}
 			},
 			{
+				displayName: '群会话ID',
+				name: 'openConversationId',
+				type: 'string',
+				default: '',
+				required: true,
+				hint: '群会话ID（对应WebHook中的conversationId）',
+				displayOptions: {
+					show: {
+						type: ['companyInternalRobot'],
+						sendMsgType: ['groupChat'],
+						enableJsonMode: [false],
+					},
+				},
+			},
+			{
 				displayName: '会话ID',
 				name: 'conversationId',
 				type: 'string',
@@ -156,7 +171,7 @@ export class DingTalkRobot implements INodeType {
 				displayOptions: {
 					show: {
 						type: ['companyInternalRobot'],
-						sendMsgType: ['groupChat', 'replyChat'],
+						sendMsgType: ['replyChat'],
 						enableJsonMode: [false],
 					},
 				},
@@ -1282,8 +1297,8 @@ export class DingTalkRobot implements INodeType {
 							);
 							result.push({ json: sendRes.body });
 						} else if(sendMsgType == 'groupChat') { // groupChat
-							const openConversationId = sendMsgParams.conversationId;
-							delete sendMsgParams.conversationId;
+							const openConversationId = sendMsgParams.openConversationId;
+							delete sendMsgParams.openConversationId;
 							let sendParams = {
 								robotCode: robotCode,
 								msgKey: msgKey,
