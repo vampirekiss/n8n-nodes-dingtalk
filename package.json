@@ -37,7 +37,8 @@
       "dist/credentials/DingTalkCompanyApi.credentials.js"
     ],
     "nodes": [
-      "dist/nodes/DingTalk/DingTalkRobot.node.js"
+      "dist/nodes/DingTalk/DingTalkRobot.node.js",
+      "dist/nodes/DingTalk/DingTalk.node.js"
     ]
   },
   "devDependencies": {
